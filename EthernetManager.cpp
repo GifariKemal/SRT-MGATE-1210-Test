@@ -33,7 +33,8 @@ bool EthernetManager::init(bool useDhcp, IPAddress staticIp, IPAddress gateway, 
   }
 
   // Configure SPI pins for W5500
-  SPI3.begin(SCK_PIN, MISO_PIN, MOSI_PIN, CS_PIN);
+  // SPI3.begin(SCK_PIN, MISO_PIN, MOSI_PIN, CS_PIN);
+  SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN, CS_PIN);
 
   // Initialize Ethernet
   Ethernet.init(CS_PIN);

@@ -28,9 +28,6 @@
 // Add missing include
 #include <new>
 
-#define VSPI FSPI     // Define VSPI if not already defined
-SPIClass SPI3(VSPI);  // Declare SPI3 globally for Ethernet
-
 // Global objects - initialized to nullptr for safety
 BLEManager* bleManager = nullptr;
 CRUDHandler* crudHandler = nullptr;

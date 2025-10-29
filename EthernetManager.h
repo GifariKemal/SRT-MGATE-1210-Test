@@ -5,8 +5,11 @@
 #include <Ethernet.h>
 #include <ArduinoJson.h>
 
-#define VSPI FSPI      // Define VSPI if not already defined
-extern SPIClass SPI3;  // Declare SPI3 as external
+// #define VSPI FSPI      // Define VSPI if not already defined
+// extern SPIClass SPI3;  // Declare SPI3 as external
+// SPIClass SPI2(SPI);
+// SPIClass SPI3(VSPI);
+
 
 
 class EthernetManager {
