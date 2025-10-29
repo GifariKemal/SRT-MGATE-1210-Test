@@ -49,6 +49,7 @@ bool ConfigManager::begin() {
     doc.to<JsonObject>();
     saveJson(DEVICES_FILE, doc);
     Serial.println("Created empty devices file");
+  }
   if (!LittleFS.exists(REGISTERS_FILE)) {
     DynamicJsonDocument doc(64);
     doc.to<JsonObject>();
