@@ -123,7 +123,9 @@ bool HttpManager::sendHttpRequest(const JsonObject& data) {
   httpClient.setTimeout(timeout);
 
   // Set headers from configuration
-  DynamicJsonDocument configDoc(1024);
+  // --- PERUBAHAN DI SINI ---
+  StaticJsonDocument<1024> configDoc; // Mengganti DynamicJsonDocument(1024)
+  // --- AKHIR PERUBAHAN ---
   JsonObject httpConfig = configDoc.to<JsonObject>();
 
   if (serverConfig->getHttpConfig(httpConfig)) {
@@ -189,7 +191,9 @@ bool HttpManager::sendHttpRequest(const JsonObject& data) {
 }
 
 void HttpManager::loadHttpConfig() {
-  DynamicJsonDocument configDoc(1024);
+  // --- PERUBAHAN DI SINI ---
+  StaticJsonDocument<1024> configDoc; // Mengganti DynamicJsonDocument(1024)
+  // --- AKHIR PERUBAHAN ---
   JsonObject httpConfig = configDoc.to<JsonObject>();
 
   Serial.println("[HTTP] Loading HTTP configuration...");
@@ -233,7 +237,9 @@ void HttpManager::publishQueueData() {
 
   // Process up to 5 items per loop to avoid blocking
   for (int i = 0; i < 5; i++) {
-    DynamicJsonDocument dataDoc(512);
+    // --- PERUBAHAN DI SINI ---
+    StaticJsonDocument<512> dataDoc; // Mengganti DynamicJsonDocument(512)
+    // --- AKHIR PERUBAHAN ---
     JsonObject dataPoint = dataDoc.to<JsonObject>();
 
     if (!queueManager->dequeue(dataPoint)) {

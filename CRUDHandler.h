@@ -7,6 +7,9 @@
 #include "LoggingConfig.h"
 #include <map>
 #include <functional>
+// Tambahan untuk thread safety
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 class BLEManager;  // Forward declaration
 
@@ -16,6 +19,7 @@ private:
   ServerConfig* serverConfig;
   LoggingConfig* loggingConfig;
   String streamDeviceId;
+  SemaphoreHandle_t streamIdMutex; // <-- TAMBAHAN untuk thread-safety
 
   // Define a type for our command handler functions
   using CommandHandler = std::function<void(BLEManager*, const JsonDocument&)>;
@@ -31,17 +35,14 @@ private:
 
 public:
   CRUDHandler(ConfigManager* config, ServerConfig* serverCfg, LoggingConfig* loggingCfg);
+  ~CRUDHandler(); // <-- TAMBAHAN
 
   void handle(BLEManager* manager, const JsonDocument& command);
-  String getStreamDeviceId() const {
-    return streamDeviceId;
-  }
-  void clearStreamDeviceId() {
-    streamDeviceId = "";
-  }
-  bool isStreaming() const {
-    return !streamDeviceId.isEmpty();
-  }
+  
+  // Fungsi-fungsi ini sekarang diimplementasikan di .cpp
+  String getStreamDeviceId();
+  void clearStreamDeviceId();
+  bool isStreaming();
 };
 
 #endif

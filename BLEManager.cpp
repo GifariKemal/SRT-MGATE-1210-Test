@@ -109,7 +109,7 @@ void BLEManager::onDisconnect(BLEServer* pServer) {
   // Stop streaming when client disconnects
   extern CRUDHandler* crudHandler;
   if (crudHandler) {
-    crudHandler->clearStreamDeviceId();
+    crudHandler->clearStreamDeviceId(); // Harusnya ini memanggil fungsi thread-safe
     QueueManager* queueMgr = QueueManager::getInstance();
     if (queueMgr) {
       queueMgr->clearStream();
@@ -180,7 +180,12 @@ void BLEManager::commandProcessingTask(void* parameter) {
 void BLEManager::handleCompleteCommand(const char* command) {
   Serial.printf("DEBUG: Raw JSON command: %s\n", command);
 
+  // --- PERUBAHAN DI SINI ---
+  // Kita KEMBALI menggunakan DynamicJsonDocument HANYA untuk alokasi PSRAM
+  // karena MemoryManager.h Anda (make_psram_unique) dibuat untuk v6.
+  // Ini akan menghasilkan WARNING, tapi MENGHILANGKAN ERROR kompilasi.
   auto doc = make_psram_unique<DynamicJsonDocument>(4096);
+  // --- AKHIR PERUBAHAN ---
 
   if (!doc) {
     sendError("PSRAM allocation failed for JSON document.");
@@ -208,14 +213,20 @@ void BLEManager::sendResponse(const JsonDocument& data) {
 }
 
 void BLEManager::sendError(const String& message) {
-  DynamicJsonDocument doc(256);
+  // --- PERUBAHAN DI SINI ---
+  // Gunakan StaticJsonDocument untuk alokasi di stack
+  StaticJsonDocument<256> doc;
+  // --- AKHIR PERUBAHAN ---
   doc["status"] = "error";
   doc["message"] = message;
   sendResponse(doc);
 }
 
 void BLEManager::sendSuccess() {
-  DynamicJsonDocument doc(128);
+  // --- PERUBAHAN DI SINI ---
+  // Gunakan StaticJsonDocument untuk alokasi di stack
+  StaticJsonDocument<128> doc;
+  // --- AKHIR PERUBAHAN ---
   doc["status"] = "ok";
   sendResponse(doc);
 }
@@ -252,12 +263,18 @@ void BLEManager::streamingTask(void* parameter) {
 
   while (true) {
     if (queueMgr && !queueMgr->isStreamEmpty()) {
-      DynamicJsonDocument dataDoc(512);
+      // --- PERUBAHAN DI SINI ---
+      // Gunakan StaticJsonDocument untuk alokasi di stack
+      StaticJsonDocument<512> dataDoc;
+      // --- AKHIR PERUBAHAN ---
       JsonObject dataPoint = dataDoc.to<JsonObject>();
 
       if (queueMgr->dequeueStream(dataPoint)) {
         Serial.println("Streaming data via BLE");
-        DynamicJsonDocument response(512);
+        // --- PERUBAHAN DI SINI ---
+        // Gunakan StaticJsonDocument untuk alokasi di stack
+        StaticJsonDocument<512> response;
+        // --- AKHIR PERUBAHAN ---
         response["status"] = "data";
         response["data"] = dataPoint;
         manager->sendResponse(response);

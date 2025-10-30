@@ -75,7 +75,7 @@ void MqttManager::mqttTask(void* parameter) {
 
 void MqttManager::mqttLoop() {
   bool wasConnected = false;
-  bool wifiWasConnected = false;
+  bool networkWasAvailable = false; // Mengganti nama dari wifiWasConnected
 
   Serial.println("[MQTT] Task started");
 
@@ -84,9 +84,9 @@ void MqttManager::mqttLoop() {
     bool networkAvailable = isNetworkAvailable();
 
     if (!networkAvailable) {
-      if (wifiWasConnected) {
+      if (networkWasAvailable) { // Mengganti nama
         Serial.println("[MQTT] Network disconnected");
-        wifiWasConnected = false;
+        networkWasAvailable = false; // Mengganti nama
         wasConnected = false;
       }
       Serial.printf("[MQTT] Waiting for network... Mode: %s, IP: %s\n",
@@ -95,11 +95,11 @@ void MqttManager::mqttLoop() {
 
       vTaskDelay(pdMS_TO_TICKS(5000));
       continue;
-    } else if (!wifiWasConnected) {
+    } else if (!networkWasAvailable) { // Mengganti nama
       Serial.printf("[MQTT] Network available - %s IP: %s\n",
                     networkManager->getCurrentMode().c_str(),
                     networkManager->getLocalIP().toString().c_str());
-      wifiWasConnected = true;
+      networkWasAvailable = true; // Mengganti nama
     }
 
     // Connect to MQTT if not connected
@@ -180,7 +180,9 @@ bool MqttManager::connectToMqtt() {
 }
 
 void MqttManager::loadMqttConfig() {
-  DynamicJsonDocument configDoc(1024);
+  // --- PERUBAHAN DI SINI ---
+  StaticJsonDocument<1024> configDoc; // Mengganti DynamicJsonDocument(1024)
+  // --- AKHIR PERUBAHAN ---
   JsonObject mqttConfig = configDoc.to<JsonObject>();
 
   Serial.println("[MQTT] Loading MQTT configuration...");
@@ -214,7 +216,9 @@ void MqttManager::publishQueueData() {
 
   // Process up to 10 items per loop to avoid blocking
   for (int i = 0; i < 10; i++) {
-    DynamicJsonDocument dataDoc(512);
+    // --- PERUBAHAN DI SINI ---
+    StaticJsonDocument<512> dataDoc; // Mengganti DynamicJsonDocument(512)
+    // --- AKHIR PERUBAHAN ---
     JsonObject dataPoint = dataDoc.to<JsonObject>();
 
     if (!queueManager->dequeue(dataPoint)) {
@@ -282,7 +286,7 @@ void MqttManager::getStatus(JsonObject& status) {
   status["running"] = running;
   status["service_type"] = "mqtt_manager";
   status["mqtt_connected"] = mqttClient.connected();
-  status["wifi_connected"] = (WiFi.status() == WL_CONNECTED);
+  status["network_available"] = isNetworkAvailable(); // Lebih akurat daripada wifi_connected
   status["broker_address"] = brokerAddress;
   status["broker_port"] = brokerPort;
   status["client_id"] = clientId;

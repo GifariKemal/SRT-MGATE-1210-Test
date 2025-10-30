@@ -92,7 +92,9 @@ void ModbusRtuService::refreshDeviceList() {
   std::priority_queue<PollingTask, std::vector<PollingTask>, std::greater<PollingTask>> emptyQueue;
   pollingQueue.swap(emptyQueue);
 
-  DynamicJsonDocument devicesIdList(2048);
+  // --- PERUBAHAN DI SINI ---
+  StaticJsonDocument<2048> devicesIdList; // Ganti JsonDocument(2048)
+  // --- AKHIR PERUBAHAN ---
   JsonArray deviceIds = devicesIdList.to<JsonArray>();
   configManager->listDevices(deviceIds);
 
@@ -104,14 +106,16 @@ void ModbusRtuService::refreshDeviceList() {
       continue;
     }
 
-    DynamicJsonDocument tempDeviceDoc(2048);
+    // --- PERUBAHAN DI SINI ---
+    StaticJsonDocument<2048> tempDeviceDoc; // Ganti JsonDocument(2048)
+    // --- AKHIR PERUBAHAN ---
     JsonObject deviceObj = tempDeviceDoc.to<JsonObject>();
     if (configManager->readDevice(deviceId, deviceObj)) {
       String protocol = deviceObj["protocol"] | "";
       if (protocol == "RTU") {
         RtuDeviceConfig newDeviceEntry;
         newDeviceEntry.deviceId = deviceId;
-        newDeviceEntry.doc.set(deviceObj);
+        newDeviceEntry.doc.set(deviceObj); // doc sekarang adalah StaticJsonDocument
         rtuDevices.push_back(std::move(newDeviceEntry));
 
         // Add device to the polling schedule for an immediate first poll
@@ -132,10 +136,10 @@ void ModbusRtuService::readRtuDevicesLoop() {
 
   while (running) {
 
-    DynamicJsonDocument devicesDoc(2048);
-
+    // --- PERUBAHAN DI SINI ---
+    StaticJsonDocument<2048> devicesDoc; // Ganti JsonDocument(2048)
+    // --- AKHIR PERUBAHAN ---
     JsonArray devices = devicesDoc.to<JsonArray>();
-
     configManager->listDevices(devices);
 
 
@@ -160,9 +164,9 @@ void ModbusRtuService::readRtuDevicesLoop() {
       }
 
 
-
-      DynamicJsonDocument deviceDoc(2048);
-
+      // --- PERUBAHAN DI SINI ---
+      StaticJsonDocument<2048> deviceDoc; // Ganti JsonDocument(2048)
+      // --- AKHIR PERUBAHAN ---
       JsonObject deviceObj = deviceDoc.to<JsonObject>();
 
       if (configManager->readDevice(deviceId, deviceObj)) {
@@ -331,7 +335,9 @@ void ModbusRtuService::storeRegisterValue(const String& deviceId, const JsonObje
   QueueManager* queueMgr = QueueManager::getInstance();
 
   // Create data point in required format
-  DynamicJsonDocument dataDoc(256);
+  // --- PERUBAHAN DI SINI ---
+  StaticJsonDocument<256> dataDoc; // Mengganti DynamicJsonDocument(256)
+  // --- AKHIR PERUBAHAN ---
   JsonObject dataPoint = dataDoc.to<JsonObject>();
 
   RTCManager* rtc = RTCManager::getInstance();
@@ -358,7 +364,7 @@ void ModbusRtuService::storeRegisterValue(const String& deviceId, const JsonObje
   bool crudHandlerAvailable = (crudHandler != nullptr);
 
   if (crudHandler) {
-    streamId = crudHandler->getStreamDeviceId();
+    streamId = crudHandler->getStreamDeviceId(); // Ini harusnya fungsi thread-safe
   }
 
   Serial.printf("RTU: Device %s, CRUDHandler: %s, StreamID '%s', Match: %s\n",

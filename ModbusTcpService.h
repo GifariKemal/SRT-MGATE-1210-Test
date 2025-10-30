@@ -25,7 +25,10 @@ private:
 
   struct TcpDeviceConfig {
     String deviceId;
-    DynamicJsonDocument doc{ 2048 };
+    // --- PERUBAHAN DI SINI ---
+    // Ganti 'JsonDocument doc{ 2048 };' menjadi 'StaticJsonDocument<2048> doc;'
+    StaticJsonDocument<2048> doc;
+    // --- AKHIR PERUBAHAN ---
   };
   std::vector<TcpDeviceConfig> tcpDevices;
 

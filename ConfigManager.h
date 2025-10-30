@@ -11,8 +11,8 @@ private:
   static const char* REGISTERS_FILE;
 
   // Cache for devices and registers
-  DynamicJsonDocument* devicesCache;
-  DynamicJsonDocument* registersCache;
+  JsonDocument* devicesCache;    // <-- PERUBAHAN
+  JsonDocument* registersCache;  // <-- PERUBAHAN
   bool devicesCacheValid;
   bool registersCacheValid;
 

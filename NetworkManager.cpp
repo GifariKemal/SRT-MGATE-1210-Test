@@ -20,19 +20,21 @@ bool NetworkMgr::init(ServerConfig* serverConfig) {
   }
 
   // 1. Ambil seluruh konfigurasi server ke dalam JsonObject sementara
-  DynamicJsonDocument serverConfigDoc(4096);  // Ukuran disesuaikan jika perlu
+  // --- PERUBAHAN DI SINI ---
+  StaticJsonDocument<4096> serverConfigDoc;  // Mengganti JsonDocument(4096)
+  // --- AKHIR PERUBAHAN ---
   JsonObject serverRoot = serverConfigDoc.to<JsonObject>();
   if (!serverConfig->getConfig(serverRoot)) {
     Serial.println("[NetworkMgr] Failed to get full server config");
-    // Pertimbangkan penanganan error, misalnya kembali ke default atau return false
   }
 
-  // 2. Tentukan primaryMode (Logika ini bisa tetap, atau disesuaikan jika 'mode' juga pindah)
-  // Periksa apakah field 'communication' masih ada dan berisi 'primary_network_mode' atau 'mode'
+  // 2. Tentukan primaryMode
   String oldMode = "";
   String primaryNetworkMode = "ETH";  // Default jika tidak ditemukan
 
-  if (serverRoot.containsKey("communication")) {
+  // --- PERUBAHAN DI SINI (Sintaks v7) ---
+  if (serverRoot["communication"].is<JsonObject>()) {
+  // --- AKHIR PERUBAHAN ---
     JsonObject comm = serverRoot["communication"].as<JsonObject>();
     oldMode = comm["mode"] | "";                                // Baca field lama jika ada
     primaryNetworkMode = comm["primary_network_mode"] | "ETH";  // Baca field baru
@@ -50,14 +52,15 @@ bool NetworkMgr::init(ServerConfig* serverConfig) {
   // 3. Ambil config WiFi dari ROOT server config
   JsonObject wifiConfig;
   bool wifiConfigPresent = false;
-  if (serverRoot.containsKey("wifi")) {
+  // --- PERUBAHAN DI SINI (Sintaks v7) ---
+  if (serverRoot["wifi"].is<JsonObject>()) {
+  // --- AKHIR PERUBAHAN ---
     wifiConfig = serverRoot["wifi"].as<JsonObject>();
     wifiConfigPresent = true;
     Serial.println("[NetworkMgr] Found 'wifi' config at root level.");
   } else {
     Serial.println("[NetworkMgr] 'wifi' config not found at root level.");
   }
-  // Ambil status 'enabled' dari objek wifi yang ditemukan
   bool wifiEnabled = wifiConfigPresent && (wifiConfig["enabled"] | false);
   Serial.printf("[NetworkMgr] WiFi Enabled: %s\n", wifiEnabled ? "true" : "false");
 
@@ -65,36 +68,36 @@ bool NetworkMgr::init(ServerConfig* serverConfig) {
   // 4. Ambil config Ethernet dari ROOT server config
   JsonObject ethernetConfig;
   bool ethernetConfigPresent = false;
-  if (serverRoot.containsKey("ethernet")) {
+  // --- PERUBAHAN DI SINI (Sintaks v7) ---
+  if (serverRoot["ethernet"].is<JsonObject>()) {
+  // --- AKHIR PERUBAHAN ---
     ethernetConfig = serverRoot["ethernet"].as<JsonObject>();
     ethernetConfigPresent = true;
     Serial.println("[NetworkMgr] Found 'ethernet' config at root level.");
   } else {
     Serial.println("[NetworkMgr] 'ethernet' config not found at root level.");
   }
-  // Ambil status 'enabled' dari objek ethernet yang ditemukan
   bool ethernetEnabled = ethernetConfigPresent && (ethernetConfig["enabled"] | false);
   Serial.printf("[NetworkMgr] Ethernet Enabled: %s\n", ethernetEnabled ? "true" : "false");
 
 
-  // Initialize WiFi if enabled (Gunakan wifiConfig dari root)
+  // Initialize WiFi if enabled
   if (wifiEnabled) {
     Serial.println("[NetworkMgr] Initializing WiFi...");
-    if (!initWiFi(wifiConfig)) {  // initWiFi sekarang menerima JsonObject langsung
+    if (!initWiFi(wifiConfig)) {
       Serial.println("[NetworkMgr] Failed to initialize WiFi");
     }
   }
 
-  // Initialize Ethernet if enabled (Gunakan ethernetConfig dari root)
+  // Initialize Ethernet if enabled
   if (ethernetEnabled) {
     Serial.println("[NetworkMgr] Initializing Ethernet...");
     bool useDhcp = ethernetConfig["use_dhcp"] | true;
     IPAddress staticIp, gateway, subnet;
     if (!useDhcp) {
-      staticIp.fromString(ethernetConfig["static_ip"] | "0.0.0.0");  // Beri default 0.0.0.0 jika kosong
+      staticIp.fromString(ethernetConfig["static_ip"] | "0.0.0.0");
       gateway.fromString(ethernetConfig["gateway"] | "0.0.0.0");
       subnet.fromString(ethernetConfig["subnet"] | "0.0.0.0");
-      // Tambahkan validasi IP di sini jika perlu
       if (staticIp.toString() == "0.0.0.0") {
         Serial.println("[NetworkMgr] Warning: Static IP is 0.0.0.0 or invalid.");
       }
@@ -104,15 +107,14 @@ bool NetworkMgr::init(ServerConfig* serverConfig) {
     }
   }
 
-  // --- Logika penentuan activeMode tetap sama ---
-  // Tentukan mode aktif awal berdasarkan primaryMode dan ketersediaan
+  // Tentukan mode aktif awal
   if (primaryMode == "ETH" && ethernetManager && ethernetManager->isAvailable()) {
     activeMode = "ETH";
   } else if (primaryMode == "WIFI" && wifiManager && wifiManager->isAvailable()) {
     activeMode = "WIFI";
-  } else if (ethernetManager && ethernetManager->isAvailable()) {  // Fallback ke Ethernet jika ada
+  } else if (ethernetManager && ethernetManager->isAvailable()) {
     activeMode = "ETH";
-  } else if (wifiManager && wifiManager->isAvailable()) {  // Fallback ke WiFi jika ada
+  } else if (wifiManager && wifiManager->isAvailable()) {
     activeMode = "WIFI";
   } else {
     activeMode = "NONE";
@@ -126,8 +128,8 @@ bool NetworkMgr::init(ServerConfig* serverConfig) {
     Serial.println("[NetworkMgr] No network available initially.");
   }
 
-  startFailoverTask();  // Mulai task failover
-  return true;          // Kembalikan true jika inisialisasi (walaupun tanpa koneksi) berhasil
+  startFailoverTask();
+  return true;
 }
 
 bool NetworkMgr::initWiFi(const JsonObject& wifiConfig) {
@@ -281,7 +283,6 @@ IPAddress NetworkMgr::getLocalIP() {
   if (activeMode == "WIFI" && wifiManager && wifiManager->isAvailable()) {
     return wifiManager->getLocalIP();
   } else if (activeMode == "ETH" && ethernetManager && ethernetManager->isAvailable()) {
-    // Tambahkan ini untuk mendapatkan IP Ethernet
     return ethernetManager->getLocalIP();
   }
   return IPAddress(0, 0, 0, 0);
@@ -295,7 +296,6 @@ Client* NetworkMgr::getActiveClient() {
   if (activeMode == "WIFI" && wifiManager && wifiManager->isAvailable()) {
     return &_wifiClient;
   } else if (activeMode == "ETH" && ethernetManager && ethernetManager->isAvailable()) {
-    // Kembalikan EthernetClient jika Ethernet aktif
     return &_ethernetClient;
   }
   return nullptr;

@@ -106,8 +106,10 @@ void setup() {
   configManager->refreshCache();
 
   // Clear all existing configurations for fresh start
-  // configManager->clearAllConfigurations();  // Commented out to preserve existing devices
+  configManager->clearAllConfigurations();  // Commented out to preserve existing devices
 
+  // Fix corrupt device IDs by recreating clean file
+  configManager->fixCorruptDeviceIds();
 
 
   Serial.println("[MAIN] Configuration initialization completed.");

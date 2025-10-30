@@ -11,8 +11,49 @@ extern ModbusTcpService* modbusTcpService;
 
 CRUDHandler::CRUDHandler(ConfigManager* config, ServerConfig* serverCfg, LoggingConfig* loggingCfg)
   : configManager(config), serverConfig(serverCfg), loggingConfig(loggingCfg), streamDeviceId("") {
+  
+  streamIdMutex = xSemaphoreCreateMutex(); // <-- TAMBAHAN
+  if (streamIdMutex == NULL) {
+      Serial.println("ERROR: Failed to create streamIdMutex!");
+  }
+  
   setupCommandHandlers();
 }
+
+// --- TAMBAHAN: Destructor ---
+CRUDHandler::~CRUDHandler() {
+  if (streamIdMutex) {
+    vSemaphoreDelete(streamIdMutex);
+  }
+}
+
+// --- TAMBAHAN: Implementasi fungsi thread-safe ---
+String CRUDHandler::getStreamDeviceId() {
+  String id = "";
+  if (xSemaphoreTake(streamIdMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+    id = streamDeviceId;
+    xSemaphoreGive(streamIdMutex);
+  }
+  return id;
+}
+
+void CRUDHandler::clearStreamDeviceId() {
+  if (xSemaphoreTake(streamIdMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+    streamDeviceId = "";
+    xSemaphoreGive(streamIdMutex);
+  }
+}
+
+bool CRUDHandler::isStreaming() {
+  bool streaming = false;
+  if (xSemaphoreTake(streamIdMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+    streaming = !streamDeviceId.isEmpty();
+    xSemaphoreGive(streamIdMutex);
+  }
+  return streaming;
+}
+// --- AKHIR TAMBAHAN ---
+
 
 void CRUDHandler::handle(BLEManager* manager, const JsonDocument& command) {
   String op = command["op"] | "";
@@ -36,26 +77,26 @@ void CRUDHandler::handle(BLEManager* manager, const JsonDocument& command) {
 void CRUDHandler::setupCommandHandlers() {
   // === READ HANDLERS ===
   readHandlers["devices"] = [this](BLEManager* manager, const JsonDocument& command) {
-    auto response = make_psram_unique<DynamicJsonDocument>(1024);
+    auto response = make_psram_unique<JsonDocument>(1024); // <-- PERUBAHAN
     (*response)["status"] = "ok";
-    JsonArray devices = response->createNestedArray("devices");
+    JsonArray devices = (*response)["devices"].to<JsonArray>(); // <-- PERUBAHAN
     configManager->listDevices(devices);
     manager->sendResponse(*response);
   };
 
   readHandlers["devices_summary"] = [this](BLEManager* manager, const JsonDocument& command) {
-    auto response = make_psram_unique<DynamicJsonDocument>(2048);
+    auto response = make_psram_unique<JsonDocument>(2048); // <-- PERUBAHAN
     (*response)["status"] = "ok";
-    JsonArray summary = response->createNestedArray("devices_summary");
+    JsonArray summary = (*response)["devices_summary"].to<JsonArray>(); // <-- PERUBAHAN
     configManager->getDevicesSummary(summary);
     manager->sendResponse(*response);
   };
 
   readHandlers["device"] = [this](BLEManager* manager, const JsonDocument& command) {
     String deviceId = command["device_id"] | "";
-    auto response = make_psram_unique<DynamicJsonDocument>(2048);
+    auto response = make_psram_unique<JsonDocument>(2048); // <-- PERUBAHAN
     (*response)["status"] = "ok";
-    JsonObject data = response->createNestedObject("data");
+    JsonObject data = (*response)["data"].to<JsonObject>(); // <-- PERUBAHAN
     if (configManager->readDevice(deviceId, data)) {
       manager->sendResponse(*response);
     } else {
@@ -65,9 +106,9 @@ void CRUDHandler::setupCommandHandlers() {
 
   readHandlers["registers"] = [this](BLEManager* manager, const JsonDocument& command) {
     String deviceId = command["device_id"] | "";
-    auto response = make_psram_unique<DynamicJsonDocument>(4096);
+    auto response = make_psram_unique<JsonDocument>(4096); // <-- PERUBAHAN
     (*response)["status"] = "ok";
-    JsonArray registers = response->createNestedArray("registers");
+    JsonArray registers = (*response)["registers"].to<JsonArray>(); // <-- PERUBAHAN
     if (configManager->listRegisters(deviceId, registers)) {
       manager->sendResponse(*response);
     } else {
@@ -77,9 +118,9 @@ void CRUDHandler::setupCommandHandlers() {
 
   readHandlers["registers_summary"] = [this](BLEManager* manager, const JsonDocument& command) {
     String deviceId = command["device_id"] | "";
-    auto response = make_psram_unique<DynamicJsonDocument>(4096);
+    auto response = make_psram_unique<JsonDocument>(4096); // <-- PERUBAHAN
     (*response)["status"] = "ok";
-    JsonArray summary = response->createNestedArray("registers_summary");
+    JsonArray summary = (*response)["registers_summary"].to<JsonArray>(); // <-- PERUBAHAN
     if (configManager->getRegistersSummary(deviceId, summary)) {
       manager->sendResponse(*response);
     } else {
@@ -88,9 +129,9 @@ void CRUDHandler::setupCommandHandlers() {
   };
 
   readHandlers["server_config"] = [this](BLEManager* manager, const JsonDocument& command) {
-    auto response = make_psram_unique<DynamicJsonDocument>(2048);
+    auto response = make_psram_unique<JsonDocument>(2048); // <-- PERUBAHAN
     (*response)["status"] = "ok";
-    JsonObject serverConfigObj = response->createNestedObject("server_config");
+    JsonObject serverConfigObj = (*response)["server_config"].to<JsonObject>(); // <-- PERUBAHAN
     if (serverConfig->getConfig(serverConfigObj)) {
       manager->sendResponse(*response);
     } else {
@@ -99,9 +140,9 @@ void CRUDHandler::setupCommandHandlers() {
   };
 
   readHandlers["logging_config"] = [this](BLEManager* manager, const JsonDocument& command) {
-    auto response = make_psram_unique<DynamicJsonDocument>(512);
+    auto response = make_psram_unique<JsonDocument>(512); // <-- PERUBAHAN
     (*response)["status"] = "ok";
-    JsonObject loggingConfigObj = response->createNestedObject("logging_config");
+    JsonObject loggingConfigObj = (*response)["logging_config"].to<JsonObject>(); // <-- PERUBAHAN
     if (loggingConfig->getConfig(loggingConfigObj)) {
       manager->sendResponse(*response);
     } else {
@@ -111,21 +152,29 @@ void CRUDHandler::setupCommandHandlers() {
 
   readHandlers["data"] = [this](BLEManager* manager, const JsonDocument& command) {
     String device = command["device_id"] | "";
-    if (device == "stop") {
-      streamDeviceId = "";
-      QueueManager::getInstance()->clearStream();
-      auto response = make_psram_unique<DynamicJsonDocument>(128);
-      (*response)["status"] = "ok";
-      (*response)["message"] = "Data streaming stopped";
-      manager->sendResponse(*response);
-    } else if (!device.isEmpty()) {
-      streamDeviceId = device;
-      auto response = make_psram_unique<DynamicJsonDocument>(128);
-      (*response)["status"] = "ok";
-      (*response)["message"] = "Data streaming started for device: " + device;
-      manager->sendResponse(*response);
+    
+    // Ambil Mutex
+    if (xSemaphoreTake(streamIdMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+      if (device == "stop") {
+        streamDeviceId = "";
+        QueueManager::getInstance()->clearStream();
+        auto response = make_psram_unique<JsonDocument>(128); // <-- PERUBAHAN
+        (*response)["status"] = "ok";
+        (*response)["message"] = "Data streaming stopped";
+        manager->sendResponse(*response);
+      } else if (!device.isEmpty()) {
+        streamDeviceId = device;
+        auto response = make_psram_unique<JsonDocument>(128); // <-- PERUBAHAN
+        (*response)["status"] = "ok";
+        (*response)["message"] = "Data streaming started for device: " + device;
+        manager->sendResponse(*response);
+      } else {
+        manager->sendError("Empty device ID");
+      }
+      // Lepas Mutex
+      xSemaphoreGive(streamIdMutex);
     } else {
-      manager->sendError("Empty device ID");
+      manager->sendError("Failed to lock stream resource");
     }
   };
 
@@ -136,7 +185,7 @@ void CRUDHandler::setupCommandHandlers() {
     if (!deviceId.isEmpty()) {
       if (modbusRtuService) modbusRtuService->notifyConfigChange();
       if (modbusTcpService) modbusTcpService->notifyConfigChange();
-      auto response = make_psram_unique<DynamicJsonDocument>(128);
+      auto response = make_psram_unique<JsonDocument>(128); // <-- PERUBAHAN
       (*response)["status"] = "ok";
       (*response)["device_id"] = deviceId;
       manager->sendResponse(*response);
@@ -152,7 +201,7 @@ void CRUDHandler::setupCommandHandlers() {
     if (!registerId.isEmpty()) {
       if (modbusRtuService) modbusRtuService->notifyConfigChange();
       if (modbusTcpService) modbusTcpService->notifyConfigChange();
-      auto response = make_psram_unique<DynamicJsonDocument>(128);
+      auto response = make_psram_unique<JsonDocument>(128); // <-- PERUBAHAN
       (*response)["status"] = "ok";
       (*response)["register_id"] = registerId;
       manager->sendResponse(*response);
@@ -168,7 +217,7 @@ void CRUDHandler::setupCommandHandlers() {
     if (configManager->updateDevice(deviceId, config)) {
       if (modbusRtuService) modbusRtuService->notifyConfigChange();
       if (modbusTcpService) modbusTcpService->notifyConfigChange();
-      auto response = make_psram_unique<DynamicJsonDocument>(128);
+      auto response = make_psram_unique<JsonDocument>(128); // <-- PERUBAHAN
       (*response)["status"] = "ok";
       (*response)["message"] = "Device updated";
       manager->sendResponse(*response);
@@ -184,7 +233,7 @@ void CRUDHandler::setupCommandHandlers() {
     if (configManager->updateRegister(deviceId, registerId, config)) {
       if (modbusRtuService) modbusRtuService->notifyConfigChange();
       if (modbusTcpService) modbusTcpService->notifyConfigChange();
-      auto response = make_psram_unique<DynamicJsonDocument>(128);
+      auto response = make_psram_unique<JsonDocument>(128); // <-- PERUBAHAN
       (*response)["status"] = "ok";
       (*response)["message"] = "Register updated";
       manager->sendResponse(*response);
@@ -196,7 +245,7 @@ void CRUDHandler::setupCommandHandlers() {
   updateHandlers["server_config"] = [this](BLEManager* manager, const JsonDocument& command) {
     JsonObjectConst config = command["config"];
     if (serverConfig->updateConfig(config)) {
-      auto response = make_psram_unique<DynamicJsonDocument>(128);
+      auto response = make_psram_unique<JsonDocument>(128); // <-- PERUBAHAN
       (*response)["status"] = "ok";
       (*response)["message"] = "Server configuration updated";
       manager->sendResponse(*response);
@@ -208,7 +257,7 @@ void CRUDHandler::setupCommandHandlers() {
   updateHandlers["logging_config"] = [this](BLEManager* manager, const JsonDocument& command) {
     JsonObjectConst config = command["config"];
     if (loggingConfig->updateConfig(config)) {
-      auto response = make_psram_unique<DynamicJsonDocument>(128);
+      auto response = make_psram_unique<JsonDocument>(128); // <-- PERUBAHAN
       (*response)["status"] = "ok";
       (*response)["message"] = "Logging configuration updated";
       manager->sendResponse(*response);
@@ -223,7 +272,7 @@ void CRUDHandler::setupCommandHandlers() {
     if (configManager->deleteDevice(deviceId)) {
       if (modbusRtuService) modbusRtuService->notifyConfigChange();
       if (modbusTcpService) modbusTcpService->notifyConfigChange();
-      auto response = make_psram_unique<DynamicJsonDocument>(128);
+      auto response = make_psram_unique<JsonDocument>(128); // <-- PERUBAHAN
       (*response)["status"] = "ok";
       (*response)["message"] = "Device deleted";
       manager->sendResponse(*response);
@@ -238,7 +287,7 @@ void CRUDHandler::setupCommandHandlers() {
     if (configManager->deleteRegister(deviceId, registerId)) {
       if (modbusRtuService) modbusRtuService->notifyConfigChange();
       if (modbusTcpService) modbusTcpService->notifyConfigChange();
-      auto response = make_psram_unique<DynamicJsonDocument>(128);
+      auto response = make_psram_unique<JsonDocument>(128); // <-- PERUBAHAN
       (*response)["status"] = "ok";
       (*response)["message"] = "Register deleted";
       manager->sendResponse(*response);

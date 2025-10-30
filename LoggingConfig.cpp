@@ -2,8 +2,8 @@
 
 const char* LoggingConfig::CONFIG_FILE = "/logging_config.json";
 
-LoggingConfig::LoggingConfig()
-  : config(256) {
+// Constructor sekarang menginisialisasi 'StaticJsonDocument<256> config'
+LoggingConfig::LoggingConfig() { 
   createDefaultConfig();
 }
 
@@ -47,23 +47,26 @@ bool LoggingConfig::loadConfig() {
 }
 
 bool LoggingConfig::validateConfig(const JsonDocument& cfg) {
-  if (!cfg.containsKey("logging_ret") || !cfg.containsKey("logging_interval")) {
-    return false;
-  }
+  // --- PERUBAHAN DI SINI (Sintaks v7) ---
+  // Ganti containsKey() dengan !.isNull() atau .is<T>()
+  if (!cfg["logging_ret"].isNull() && !cfg["logging_interval"].isNull()) {
+  // --- AKHIR PERUBAHAN ---
 
-  // Validate retention values
-  String ret = cfg["logging_ret"];
-  if (ret != "1w" && ret != "1m" && ret != "3m") {
-    return false;
-  }
+    // Validate retention values
+    String ret = cfg["logging_ret"];
+    if (ret != "1w" && ret != "1m" && ret != "3m") {
+      return false;
+    }
 
-  // Validate interval values
-  String interval = cfg["logging_interval"];
-  if (interval != "5m" && interval != "10m" && interval != "30m") {
-    return false;
-  }
+    // Validate interval values
+    String interval = cfg["logging_interval"];
+    if (interval != "5m" && interval != "10m" && interval != "30m") {
+      return false;
+    }
 
-  return true;
+    return true;
+  }
+  return false; // Gagal jika salah satu kunci tidak ada
 }
 
 bool LoggingConfig::getConfig(JsonObject& result) {
@@ -75,7 +78,9 @@ bool LoggingConfig::getConfig(JsonObject& result) {
 
 bool LoggingConfig::updateConfig(JsonObjectConst newConfig) {
   // Create temporary config for validation
-  DynamicJsonDocument tempConfig(256);
+  // --- PERUBAHAN DI SINI ---
+  StaticJsonDocument<256> tempConfig; // Mengganti DynamicJsonDocument(256)
+  // --- AKHIR PERUBAHAN ---
   tempConfig.set(newConfig);
 
   if (!validateConfig(tempConfig)) {

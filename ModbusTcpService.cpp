@@ -80,7 +80,9 @@ void ModbusTcpService::refreshDeviceList() {
   std::priority_queue<PollingTask, std::vector<PollingTask>, std::greater<PollingTask>> emptyQueue;
   pollingQueue.swap(emptyQueue);
 
-  DynamicJsonDocument devicesIdList(2048);
+  // --- PERUBAHAN DI SINI ---
+  StaticJsonDocument<2048> devicesIdList; // Ganti JsonDocument(2048)
+  // --- AKHIR PERUBAHAN ---
   JsonArray deviceIds = devicesIdList.to<JsonArray>();
   configManager->listDevices(deviceIds);
 
@@ -92,14 +94,16 @@ void ModbusTcpService::refreshDeviceList() {
       continue;
     }
 
-    DynamicJsonDocument tempDeviceDoc(2048);
+    // --- PERUBAHAN DI SINI ---
+    StaticJsonDocument<2048> tempDeviceDoc; // Ganti JsonDocument(2048)
+    // --- AKHIR PERUBAHAN ---
     JsonObject deviceObj = tempDeviceDoc.to<JsonObject>();
     if (configManager->readDevice(deviceId, deviceObj)) {
       String protocol = deviceObj["protocol"] | "";
       if (protocol == "TCP") {
         TcpDeviceConfig newDeviceEntry;
         newDeviceEntry.deviceId = deviceId;
-        newDeviceEntry.doc.set(deviceObj);
+        newDeviceEntry.doc.set(deviceObj); // doc sekarang adalah StaticJsonDocument
         tcpDevices.push_back(std::move(newDeviceEntry));
 
         // Add device to the polling schedule for an immediate first poll
@@ -134,11 +138,10 @@ void ModbusTcpService::readTcpDevicesLoop() {
     }
 
 
-
-    DynamicJsonDocument devicesDoc(2048);
-
+    // --- PERUBAHAN DI SINI ---
+    StaticJsonDocument<2048> devicesDoc; // Ganti JsonDocument(2048)
+    // --- AKHIR PERUBAHAN ---
     JsonArray devices = devicesDoc.to<JsonArray>();
-
     configManager->listDevices(devices);
 
 
@@ -156,9 +159,9 @@ void ModbusTcpService::readTcpDevicesLoop() {
       String deviceId = deviceVar.as<String>();
 
 
-
-      DynamicJsonDocument deviceDoc(2048);
-
+      // --- PERUBAHAN DI SINI ---
+      StaticJsonDocument<2048> deviceDoc; // Ganti JsonDocument(2048)
+      // --- AKHIR PERUBAHAN ---
       JsonObject deviceObj = deviceDoc.to<JsonObject>();
 
       if (configManager->readDevice(deviceId, deviceObj)) {
@@ -452,11 +455,22 @@ bool ModbusTcpService::readModbusRegister(EthernetClient& client, uint8_t slaveI
 
   // Wait for response with timeout
   unsigned long timeout = millis() + 5000;
-  while (client.available() < (9 + (qty * 2)) && millis() < timeout) {  // Expect 9 bytes header + qty*2 bytes data
+  
+  // Perkiraan panjang response minimal
+  int minResponseLength = 9; // Header minimal
+  if (functionCode == 3 || functionCode == 4) {
+      minResponseLength = 9 + 1 + (qty * 2); // Header + byte count + data
+  } else if (functionCode == 1 || functionCode == 2) {
+      minResponseLength = 9 + 1 + (qty + 7) / 8; // Header + byte count + data (bit-packed)
+  }
+
+  while (client.available() < minResponseLength && millis() < timeout) {
     vTaskDelay(pdMS_TO_TICKS(10));
   }
 
-  if (client.available() < (9 + (qty * 2))) {
+  if (client.available() < minResponseLength) {
+    Serial.printf("[TCP Read] Timeout or insufficient data. Expected %d, got %d\n", minResponseLength, client.available());
+    while(client.available()) client.read(); // Kosongkan buffer
     return false;
   }
 
@@ -469,7 +483,7 @@ bool ModbusTcpService::readModbusRegister(EthernetClient& client, uint8_t slaveI
 
 bool ModbusTcpService::readModbusCoil(EthernetClient& client, uint8_t slaveId, uint16_t address, bool* result) {
 
-  // Build Modbus TCP request for coil
+  // Build Modbus TCP request for coil (FC 1, qty 1)
   uint8_t request[12];
   uint16_t transId = transactionCounter++;
   buildModbusRequest(request, transId, slaveId, 1, address, 1);  // Function code 1 for coils
@@ -477,14 +491,16 @@ bool ModbusTcpService::readModbusCoil(EthernetClient& client, uint8_t slaveId, u
   // Send request
   client.write(request, 12);
 
-  // Wait for response with timeout
+  // Wait for response with timeout (Expected: 9 header + 1 byte count + 1 data byte = 11 bytes)
   unsigned long timeout = millis() + 5000;
-  while (client.available() < 9 && millis() < timeout) {
+  int expectedLength = 11;
+  while (client.available() < expectedLength && millis() < timeout) {
     vTaskDelay(pdMS_TO_TICKS(10));
   }
 
-  if (client.available() < 9) {
-    client.stop();
+  if (client.available() < expectedLength) {
+    Serial.printf("[TCP ReadCoil] Timeout or insufficient data. Expected %d, got %d\n", expectedLength, client.available());
+    while(client.available()) client.read(); // Kosongkan buffer
     return false;
   }
 
@@ -515,46 +531,52 @@ void ModbusTcpService::buildModbusRequest(uint8_t* buffer, uint16_t transId, uin
 
 bool ModbusTcpService::parseModbusResponse(uint8_t* buffer, int length, uint8_t expectedFunc, uint16_t expectedQty, uint16_t* resultBuffer, bool* boolResult) {
   if (length < 9) {
+    Serial.println("[TCP Parse] Response too short.");
     return false;
   }
 
   // Check function code
   uint8_t funcCode = buffer[7];
   if (funcCode != expectedFunc) {
-    // Check for error response
+    // Check for error response (MSB set)
     if (funcCode == (expectedFunc | 0x80)) {
-      // Modbus error
-      Serial.printf("Modbus error response: Function Code 0x%02X, Exception Code 0x%02X\n", funcCode, buffer[8]);
+      Serial.printf("[TCP Parse] Modbus error response: Function Code 0x%02X, Exception Code 0x%02X\n", funcCode, buffer[8]);
+    } else {
+      Serial.printf("[TCP Parse] Function code mismatch. Expected 0x%02X, got 0x%02X\n", expectedFunc, funcCode);
     }
     return false;
   }
 
   // Parse data based on function code
-  if (funcCode == 1 || funcCode == 2) {
-    // Coil/discrete input response
-    if (length >= 9 && boolResult) {  // Minimum 9 bytes for header + 1 byte for byte count
-      uint8_t byteCount = buffer[8];
+  if (funcCode == 1 || funcCode == 2) { // Read Coils / Read Discrete Inputs
+    uint8_t byteCount = buffer[8];
+    if (length >= (9 + 1 + byteCount) && boolResult && expectedQty == 1) { 
       if (byteCount > 0) {
-        // For coils, we only care about the first bit of the first byte
         *boolResult = (buffer[9] & 0x01) != 0;
         return true;
       }
+    } else if (length < (9 + 1 + byteCount)) {
+        Serial.println("[TCP Parse] Mismatch in coil data length.");
+        return false;
     }
-  } else if (funcCode == 3 || funcCode == 4) {
-    // Register response
-    // Expected length: 9 bytes header + 1 byte byteCount + expectedQty * 2 bytes data
-    if (length >= (9 + 1 + expectedQty * 2) && resultBuffer) {
-      uint8_t byteCount = buffer[8];
-      if (byteCount == (expectedQty * 2)) {
-        for (int i = 0; i < expectedQty; i++) {
-          // Modbus registers are Big-Endian (MSB first)
-          resultBuffer[i] = (buffer[9 + (i * 2)] << 8) | buffer[10 + (i * 2)];
-        }
-        return true;
+  } else if (funcCode == 3 || funcCode == 4) { // Read Holding / Read Input Registers
+    uint8_t byteCount = buffer[8];
+    if (byteCount != (expectedQty * 2)) {
+        Serial.printf("[TCP Parse] Byte count mismatch. Expected %d, got %d\n", (expectedQty * 2), byteCount);
+        return false;
+    }
+    if (length >= (9 + 1 + byteCount) && resultBuffer) {
+      for (int i = 0; i < expectedQty; i++) {
+        resultBuffer[i] = (buffer[9 + (i * 2)] << 8) | buffer[10 + (i * 2)];
       }
+      return true;
+    } else if (length < (9 + 1 + byteCount)) {
+        Serial.println("[TCP Parse] Mismatch in register data length.");
+        return false;
     }
   }
 
+  Serial.println("[TCP Parse] Unknown parse error.");
   return false;
 }
 
@@ -562,7 +584,9 @@ void ModbusTcpService::storeRegisterValue(const String& deviceId, const JsonObje
   QueueManager* queueMgr = QueueManager::getInstance();
 
   // Create data point in required format
-  DynamicJsonDocument dataDoc(256);
+  // --- PERUBAHAN DI SINI ---
+  StaticJsonDocument<256> dataDoc; // Mengganti DynamicJsonDocument(256)
+  // --- AKHIR PERUBAHAN ---
   JsonObject dataPoint = dataDoc.to<JsonObject>();
 
   RTCManager* rtc = RTCManager::getInstance();
@@ -589,7 +613,7 @@ void ModbusTcpService::storeRegisterValue(const String& deviceId, const JsonObje
   bool crudHandlerAvailable = (crudHandler != nullptr);
 
   if (crudHandler) {
-    streamId = crudHandler->getStreamDeviceId();
+    streamId = crudHandler->getStreamDeviceId(); // Ini harusnya fungsi thread-safe
   }
 
   Serial.printf("TCP: Device %s, CRUDHandler: %s, StreamID '%s', Match: %s\n",

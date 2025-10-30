@@ -60,7 +60,7 @@ bool QueueManager::enqueue(const JsonObject& dataPoint) {
     // Remove oldest item to make space
     char* oldItem;
     if (xQueueReceive(dataQueue, &oldItem, 0) == pdTRUE) {
-      free(oldItem);
+      heap_caps_free(oldItem); // Gunakan heap_caps_free jika dialokasikan di PSRAM/heap
     }
   }
 
@@ -81,9 +81,9 @@ bool QueueManager::enqueue(const JsonObject& dataPoint) {
   bool success = xQueueSend(dataQueue, &jsonCopy, 0) == pdTRUE;
 
   if (success) {
-    Serial.printf("Data queued: %s\n", dataPoint["name"].as<String>().c_str());
+    // Serial.printf("Data queued: %s\n", dataPoint["name"].as<String>().c_str()); // Uncomment jika perlu debug
   } else {
-    heap_caps_free(jsonCopy);
+    heap_caps_free(jsonCopy); // free jika gagal enqueue
   }
 
   xSemaphoreGive(queueMutex);
@@ -107,7 +107,10 @@ bool QueueManager::dequeue(JsonObject& dataPoint) {
     return false;
   }
 
-  DynamicJsonDocument doc(512);
+  // --- PERUBAHAN DI SINI ---
+  StaticJsonDocument<512> doc; // Mengganti JsonDocument(512)
+  // --- AKHIR PERUBAHAN ---
+
   DeserializationError error = deserializeJson(doc, jsonString);
   bool success = false;
 
@@ -119,7 +122,7 @@ bool QueueManager::dequeue(JsonObject& dataPoint) {
     success = true;
   }
 
-  heap_caps_free(jsonString);
+  heap_caps_free(jsonString); // Selalu free string setelah di-deserialize
   return success;
 }
 
@@ -136,7 +139,9 @@ bool QueueManager::peek(JsonObject& dataPoint) {
   bool success = false;
 
   if (xQueuePeek(dataQueue, &jsonString, 0) == pdTRUE) {
-    DynamicJsonDocument doc(512);
+    // --- PERUBAHAN DI SINI ---
+    StaticJsonDocument<512> doc; // Mengganti JsonDocument(512)
+    // --- AKHIR PERUBAHAN ---
     DeserializationError error = deserializeJson(doc, jsonString);
 
     if (error == DeserializationError::Ok) {
@@ -211,7 +216,7 @@ bool QueueManager::enqueueStream(const JsonObject& dataPoint) {
   if (uxQueueMessagesWaiting(streamQueue) >= MAX_STREAM_QUEUE_SIZE) {
     char* oldItem;
     if (xQueueReceive(streamQueue, &oldItem, 0) == pdTRUE) {
-      free(oldItem);
+      heap_caps_free(oldItem); // Gunakan heap_caps_free
     }
   }
 
@@ -231,10 +236,10 @@ bool QueueManager::enqueueStream(const JsonObject& dataPoint) {
   bool success = xQueueSend(streamQueue, &jsonCopy, 0) == pdTRUE;
 
   if (success) {
-    Serial.printf("Stream queue: Added data, size now: %d\n", uxQueueMessagesWaiting(streamQueue));
+    // Serial.printf("Stream queue: Added data, size now: %d\n", uxQueueMessagesWaiting(streamQueue)); // Uncomment jika perlu debug
   } else {
     Serial.println("Stream queue: Failed to add data");
-    heap_caps_free(jsonCopy);
+    heap_caps_free(jsonCopy); // free jika gagal enqueue
   }
 
   xSemaphoreGive(streamMutex);
@@ -250,12 +255,16 @@ bool QueueManager::dequeueStream(JsonObject& dataPoint) {
     return false;
   }
 
-  char* jsonString;
+  char* jsonString = nullptr;
   bool success = false;
 
   if (xQueueReceive(streamQueue, &jsonString, 0) == pdTRUE) {
-    Serial.printf("Stream queue: Dequeued data, size now: %d\n", uxQueueMessagesWaiting(streamQueue));
-    DynamicJsonDocument doc(512);
+    // Serial.printf("Stream queue: Dequeued data, size now: %d\n", uxQueueMessagesWaiting(streamQueue)); // Uncomment jika perlu debug
+    
+    // --- PERUBAHAN DI SINI ---
+    StaticJsonDocument<512> doc; // Mengganti JsonDocument(512)
+    // --- AKHIR PERUBAHAN ---
+
     if (deserializeJson(doc, jsonString) == DeserializationError::Ok) {
       JsonObject obj = doc.as<JsonObject>();
       for (JsonPair kv : obj) {
@@ -263,7 +272,7 @@ bool QueueManager::dequeueStream(JsonObject& dataPoint) {
       }
       success = true;
     }
-    heap_caps_free(jsonString);
+    heap_caps_free(jsonString); // Selalu free string setelah di-deserialize
   }
 
   xSemaphoreGive(streamMutex);
@@ -271,7 +280,8 @@ bool QueueManager::dequeueStream(JsonObject& dataPoint) {
 }
 
 bool QueueManager::isStreamEmpty() {
-  return streamQueue == nullptr || uxQueueMessagesWaiting(streamQueue) == 0;
+  if (streamQueue == nullptr) return true;
+  return uxQueueMessagesWaiting(streamQueue) == 0;
 }
 
 void QueueManager::clearStream() {
@@ -306,4 +316,4 @@ QueueManager::~QueueManager() {
   if (streamMutex) {
     vSemaphoreDelete(streamMutex);
   }
-}
+} 
