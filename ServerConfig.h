@@ -8,7 +8,7 @@
 class ServerConfig {
 private:
   static const char* CONFIG_FILE;
-  JsonDocument* config; // <-- PERUBAHAN
+  DynamicJsonDocument* config;
 
   bool saveConfig();
   bool loadConfig();

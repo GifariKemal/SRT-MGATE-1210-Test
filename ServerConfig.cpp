@@ -6,18 +6,18 @@ const char* ServerConfig::CONFIG_FILE = "/server_config.json";
 
 ServerConfig::ServerConfig() {
   // Allocate config in PSRAM
-  config = (JsonDocument*)heap_caps_malloc(sizeof(JsonDocument), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT); // <-- PERUBAHAN
+  config = (DynamicJsonDocument*)heap_caps_malloc(sizeof(DynamicJsonDocument), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
   if (config) {
-    new (config) JsonDocument(4096); // <-- PERUBAHAN
+    new (config) DynamicJsonDocument(4096);
   } else {
-    config = new JsonDocument(4096); // <-- PERUBAHAN
+    config = new DynamicJsonDocument(4096);
   }
   createDefaultConfig();
 }
 
 ServerConfig::~ServerConfig() {
   if (config) {
-    config->~JsonDocument(); // <-- PERUBAHAN
+    config->~DynamicJsonDocument();
     heap_caps_free(config);
   }
 }
@@ -54,16 +54,16 @@ void ServerConfig::createDefaultConfig() {
   JsonObject root = config->to<JsonObject>();
 
   // Communication config
-  JsonObject comm = root["communication"].to<JsonObject>(); // <-- PERUBAHAN
-  comm["primary_network_mode"] = "ETH";   // Default to Ethernet as primary
-  comm["connection_mode"] = "Automatic";  // Not used for failover, but kept for compatibility
+  JsonObject comm = root["communication"].to<JsonObject>();  // <-- PERUBAHAN
+  comm["primary_network_mode"] = "ETH";                      // Default to Ethernet as primary
+  comm["connection_mode"] = "Automatic";                     // Not used for failover, but kept for compatibility
 
-  JsonObject wifi = comm["wifi"].to<JsonObject>(); // <-- PERUBAHAN
+  JsonObject wifi = comm["wifi"].to<JsonObject>();  // <-- PERUBAHAN
   wifi["enabled"] = true;
   wifi["ssid"] = "MyWiFiNetwork";
   wifi["password"] = "MySecretPassword";
 
-  JsonObject ethernet = comm["ethernet"].to<JsonObject>(); // <-- PERUBAHAN
+  JsonObject ethernet = comm["ethernet"].to<JsonObject>();  // <-- PERUBAHAN
   ethernet["enabled"] = true;
   ethernet["use_dhcp"] = true;
   ethernet["static_ip"] = "192.168.1.177";
@@ -73,12 +73,12 @@ void ServerConfig::createDefaultConfig() {
   // Protocol and data interval
   root["protocol"] = "mqtt";
 
-  JsonObject dataInterval = root["data_interval"].to<JsonObject>(); // <-- PERUBAHAN
+  JsonObject dataInterval = root["data_interval"].to<JsonObject>();  // <-- PERUBAHAN
   dataInterval["value"] = 1000;
   dataInterval["unit"] = "ms";
 
   // MQTT config
-  JsonObject mqtt = root["mqtt_config"].to<JsonObject>(); // <-- PERUBAHAN
+  JsonObject mqtt = root["mqtt_config"].to<JsonObject>();  // <-- PERUBAHAN
   mqtt["enabled"] = true;
   mqtt["broker_address"] = "demo.thingsboard.io";
   mqtt["broker_port"] = 1883;
@@ -92,7 +92,7 @@ void ServerConfig::createDefaultConfig() {
   mqtt["use_tls"] = false;
 
   // HTTP config
-  JsonObject http = root["http_config"].to<JsonObject>(); // <-- PERUBAHAN
+  JsonObject http = root["http_config"].to<JsonObject>();  // <-- PERUBAHAN
   http["enabled"] = true;
   http["endpoint_url"] = "https://api.example.com/data";
   http["method"] = "POST";
@@ -100,7 +100,7 @@ void ServerConfig::createDefaultConfig() {
   http["timeout"] = 5000;
   http["retry"] = 3;
 
-  JsonObject headers = http["headers"].to<JsonObject>(); // <-- PERUBAHAN
+  JsonObject headers = http["headers"].to<JsonObject>();  // <-- PERUBAHAN
   headers["Authorization"] = "Bearer token";
   headers["Content-Type"] = "application/json";
 }
@@ -130,7 +130,7 @@ bool ServerConfig::loadConfig() {
 }
 
 bool ServerConfig::validateConfig(const JsonDocument& cfg) {
-  if (cfg["communication"].isNull() || cfg["protocol"].isNull()) { // <-- PERUBAHAN
+  if (cfg["communication"].isNull() || cfg["protocol"].isNull()) {  // <-- PERUBAHAN
     return false;
   }
   return true;
@@ -145,7 +145,7 @@ bool ServerConfig::getConfig(JsonObject& result) {
 
 bool ServerConfig::updateConfig(JsonObjectConst newConfig) {
   // Create temporary config for validation
-  JsonDocument tempConfig(4096); // <-- PERUBAHAN
+  StaticJsonDocument<4096> tempConfig;
   tempConfig.set(newConfig);
 
   if (!validateConfig(tempConfig)) {
@@ -163,7 +163,7 @@ bool ServerConfig::updateConfig(JsonObjectConst newConfig) {
 }
 
 bool ServerConfig::getCommunicationConfig(JsonObject& result) {
-  if (config->as<JsonObject>()["communication"].is<JsonObject>()) { // <-- PERUBAHAN
+  if (config->as<JsonObject>()["communication"].is<JsonObject>()) {  // <-- PERUBAHAN
     JsonObject comm = (*config)["communication"];
     for (JsonPair kv : comm) {
       result[kv.key()] = kv.value();
@@ -178,7 +178,7 @@ String ServerConfig::getProtocol() {
 }
 
 bool ServerConfig::getDataIntervalConfig(JsonObject& result) {
-  if (config->as<JsonObject>()["data_interval"].is<JsonObject>()) { // <-- PERUBAHAN
+  if (config->as<JsonObject>()["data_interval"].is<JsonObject>()) {  // <-- PERUBAHAN
     JsonObject interval = (*config)["data_interval"];
     for (JsonPair kv : interval) {
       result[kv.key()] = kv.value();
@@ -189,7 +189,7 @@ bool ServerConfig::getDataIntervalConfig(JsonObject& result) {
 }
 
 bool ServerConfig::getMqttConfig(JsonObject& result) {
-  if (config->as<JsonObject>()["mqtt_config"].is<JsonObject>()) { // <-- PERUBAHAN
+  if (config->as<JsonObject>()["mqtt_config"].is<JsonObject>()) {  // <-- PERUBAHAN
     JsonObject mqtt = (*config)["mqtt_config"];
     for (JsonPair kv : mqtt) {
       result[kv.key()] = kv.value();
@@ -200,7 +200,7 @@ bool ServerConfig::getMqttConfig(JsonObject& result) {
 }
 
 bool ServerConfig::getHttpConfig(JsonObject& result) {
-  if (config->as<JsonObject>()["http_config"].is<JsonObject>()) { // <-- PERUBAHAN
+  if (config->as<JsonObject>()["http_config"].is<JsonObject>()) {  // <-- PERUBAHAN
     JsonObject http = (*config)["http_config"];
     for (JsonPair kv : http) {
       result[kv.key()] = kv.value();
@@ -213,9 +213,9 @@ bool ServerConfig::getHttpConfig(JsonObject& result) {
 bool ServerConfig::getWifiConfig(JsonObject& result) {
   // Perhatikan: Ini masih membaca dari dalam "communication"
   // Sesuai dengan defaultConfig Anda, BUKAN perbaikan untuk app
-  if (config->as<JsonObject>()["communication"].is<JsonObject>()) { // <-- PERUBAHAN
+  if (config->as<JsonObject>()["communication"].is<JsonObject>()) {  // <-- PERUBAHAN
     JsonObject comm = (*config)["communication"];
-    if (comm["wifi"].is<JsonObject>()) { // <-- PERUBAHAN
+    if (comm["wifi"].is<JsonObject>()) {  // <-- PERUBAHAN
       JsonObject wifi = comm["wifi"];
       for (JsonPair kv : wifi) {
         result[kv.key()] = kv.value();
@@ -229,9 +229,9 @@ bool ServerConfig::getWifiConfig(JsonObject& result) {
 bool ServerConfig::getEthernetConfig(JsonObject& result) {
   // Perhatikan: Ini masih membaca dari dalam "communication"
   // Sesuai dengan defaultConfig Anda, BUKAN perbaikan untuk app
-  if (config->as<JsonObject>()["communication"].is<JsonObject>()) { // <-- PERUBAHAN
+  if (config->as<JsonObject>()["communication"].is<JsonObject>()) {  // <-- PERUBAHAN
     JsonObject comm = (*config)["communication"];
-    if (comm["ethernet"].is<JsonObject>()) { // <-- PERUBAHAN
+    if (comm["ethernet"].is<JsonObject>()) {  // <-- PERUBAHAN
       JsonObject ethernet = comm["ethernet"];
       for (JsonPair kv : ethernet) {
         result[kv.key()] = kv.value();
@@ -244,7 +244,7 @@ bool ServerConfig::getEthernetConfig(JsonObject& result) {
 
 String ServerConfig::getPrimaryNetworkMode() {
   // Perhatikan: Ini masih membaca dari dalam "communication"
-  if (config->as<JsonObject>()["communication"].is<JsonObject>()) { // <-- PERUBAHAN
+  if (config->as<JsonObject>()["communication"].is<JsonObject>()) {  // <-- PERUBAHAN
     JsonObject comm = (*config)["communication"];
     return comm["primary_network_mode"] | "ETH";  // Default to ETH if not specified
   }
@@ -253,7 +253,7 @@ String ServerConfig::getPrimaryNetworkMode() {
 
 String ServerConfig::getCommunicationMode() {
   // Perhatikan: Ini masih membaca dari dalam "communication"
-  if (config->as<JsonObject>()["communication"].is<JsonObject>()) { // <-- PERUBAHAN
+  if (config->as<JsonObject>()["communication"].is<JsonObject>()) {  // <-- PERUBAHAN
     JsonObject comm = (*config)["communication"];
     return comm["mode"] | "";  // Return old 'mode' field if present, else empty
   }

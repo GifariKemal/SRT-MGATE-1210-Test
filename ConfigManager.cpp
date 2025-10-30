@@ -11,9 +11,7 @@ const char* ConfigManager::REGISTERS_FILE = "/registers.json";
 ConfigManager::ConfigManager()
   : devicesCache(nullptr), registersCache(nullptr),
     devicesCacheValid(false), registersCacheValid(false) {
-  // --- PERBAIKAN: Kembalikan ke DynamicJsonDocument untuk alokasi PSRAM (heap) ---
-  // Ini akan memperbaiki error "no matching function for call to 'JsonDocument(int)'"
-  // saat menggunakan 'new (placement)'
+  // --- PERBAIKAN: Gunakan DynamicJsonDocument (sesuai .h) ---
   devicesCache = (DynamicJsonDocument*)heap_caps_malloc(sizeof(DynamicJsonDocument), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
   if (devicesCache) {
     new (devicesCache) DynamicJsonDocument(8192);
@@ -31,14 +29,16 @@ ConfigManager::ConfigManager()
 }
 
 ConfigManager::~ConfigManager() {
+  // --- PERBAIKAN: Sesuaikan destructor (sesuai .h) ---
   if (devicesCache) {
-    devicesCache->~DynamicJsonDocument();  // Sesuaikan destructor
+    devicesCache->~DynamicJsonDocument();
     heap_caps_free(devicesCache);
   }
   if (registersCache) {
-    registersCache->~DynamicJsonDocument();  // Sesuaikan destructor
+    registersCache->~DynamicJsonDocument();
     heap_caps_free(registersCache);
   }
+  // --- AKHIR PERBAIKAN ---
 }
 
 bool ConfigManager::begin() {
@@ -49,7 +49,7 @@ bool ConfigManager::begin() {
 
   if (!LittleFS.exists(DEVICES_FILE)) {
     // --- PERBAIKAN: Gunakan StaticJsonDocument untuk alokasi di STACK ---
-    StaticJsonDocument<64> doc;  // Ganti dari JsonDocument(64)
+    StaticJsonDocument<64> doc;
     // --- AKHIR PERBAIKAN ---
     doc.to<JsonObject>();
     saveJson(DEVICES_FILE, doc);
@@ -57,7 +57,7 @@ bool ConfigManager::begin() {
   }
   if (!LittleFS.exists(REGISTERS_FILE)) {
     // --- PERBAIKAN: Gunakan StaticJsonDocument untuk alokasi di STACK ---
-    StaticJsonDocument<64> doc;  // Ganti dari JsonDocument(64)
+    StaticJsonDocument<64> doc;
     // --- AKHIR PERBAIKAN ---
     doc.to<JsonObject>();
     saveJson(REGISTERS_FILE, doc);
@@ -161,7 +161,7 @@ bool ConfigManager::readDevice(const String& deviceId, JsonObject& result) {
 
   // --- PERBAIKAN: Sintaks v7 untuk containsKey ---
   if (!(*devicesCache)[deviceId].isNull()) {
-    // --- AKHIR PERBAIKAN ---
+  // --- AKHIR PERBAIKAN ---
     JsonObject device = (*devicesCache)[deviceId];
     for (JsonPair kv : device) {
       result[kv.key()] = kv.value();
@@ -188,7 +188,7 @@ bool ConfigManager::updateDevice(const String& deviceId, JsonObjectConst config)
 
   // --- PERBAIKAN: Sintaks v7 untuk containsKey ---
   if ((*devicesCache)[deviceId].isNull()) {
-    // --- AKHIR PERBAIKAN ---
+  // --- AKHIR PERBAIKAN ---
     Serial.printf("Device %s not found for update\n", deviceId.c_str());
     return false;
   }
@@ -214,7 +214,7 @@ bool ConfigManager::updateDevice(const String& deviceId, JsonObjectConst config)
   device["device_id"] = deviceId;
   // --- PERBAIKAN: Sintaks v7 untuk containsKey ---
   if (device["registers"].isNull()) {
-    // --- AKHIR PERBAIKAN ---
+  // --- AKHIR PERBAIKAN ---
     device["registers"] = existingRegisters;
   }
 
@@ -233,7 +233,7 @@ bool ConfigManager::deleteDevice(const String& deviceId) {
 
   // --- PERBAIKAN: Sintaks v7 untuk containsKey ---
   if (!(*devicesCache)[deviceId].isNull()) {
-    // --- AKHIR PERBAIKAN ---
+  // --- AKHIR PERBAIKAN ---
     devicesCache->as<JsonObject>().remove(deviceId);  // Perlu cast ke JsonObject untuk remove
     if (saveJson(DEVICES_FILE, *devicesCache)) {
       return true;
@@ -285,7 +285,7 @@ void ConfigManager::listDevices(JsonArray& devices) {
 
 void ConfigManager::getDevicesSummary(JsonArray& summary) {
   // --- PERBAIKAN: Gunakan StaticJsonDocument untuk alokasi di STACK ---
-  StaticJsonDocument<4096> devices;  // Ganti dari JsonDocument(4096)
+  StaticJsonDocument<4096> devices;
   // --- AKHIR PERBAIKAN ---
   if (!loadJson(DEVICES_FILE, devices)) return;
 
@@ -321,7 +321,7 @@ String ConfigManager::createRegister(const String& deviceId, JsonObjectConst con
 
   // --- PERBAIKAN: Sintaks v7 untuk containsKey ---
   if ((*devicesCache)[deviceId].isNull()) {
-    // --- AKHIR PERBAIKAN ---
+  // --- AKHIR PERBAIKAN ---
     Serial.printf("[CREATE_REGISTER] Device %s not found in cache\n", deviceId.c_str());
     return "";
   }
@@ -329,7 +329,7 @@ String ConfigManager::createRegister(const String& deviceId, JsonObjectConst con
   // Validate required fields
   // --- PERBAIKAN: Sintaks v7 untuk containsKey ---
   if (config["address"].isNull() || config["register_name"].isNull()) {
-    // --- AKHIR PERBAIKAN ---
+  // --- AKHIR PERBAIKAN ---
     Serial.println("[CREATE_REGISTER] Missing required register fields: address or register_name");
     return "";
   }
@@ -341,7 +341,7 @@ String ConfigManager::createRegister(const String& deviceId, JsonObjectConst con
   // --- PERBAIKAN: Sintaks v7 untuk containsKey ---
   if (device["registers"].isNull()) {
     device["registers"].to<JsonArray>();  // Sintaks v7
-                                          // --- AKHIR PERBAIKAN ---
+  // --- AKHIR PERBAIKAN ---
     Serial.println("Created registers array for device");
   }
 
@@ -419,11 +419,11 @@ bool ConfigManager::listRegisters(const String& deviceId, JsonArray& registers) 
 
   // --- PERBAIKAN: Sintaks v7 untuk containsKey ---
   if (!(*devicesCache)[deviceId].isNull()) {
-    // --- AKHIR PERBAIKAN ---
+  // --- AKHIR PERBAIKAN ---
     JsonObject device = (*devicesCache)[deviceId];
     // --- PERBAIKAN: Sintaks v7 untuk containsKey/is<T> ---
     if (device["registers"].is<JsonArray>()) {
-      // --- AKHIR PERBAIKAN ---
+    // --- AKHIR PERBAIKAN ---
       JsonArray deviceRegisters = device["registers"];
       Serial.printf("Device %s has %d registers in cache\n", deviceId.c_str(), deviceRegisters.size());
       for (JsonVariant reg : deviceRegisters) {
@@ -447,11 +447,11 @@ bool ConfigManager::getRegistersSummary(const String& deviceId, JsonArray& summa
 
   // --- PERBAIKAN: Sintaks v7 untuk containsKey ---
   if (!(*devicesCache)[deviceId].isNull()) {
-    // --- AKHIR PERBAIKAN ---
+  // --- AKHIR PERBAIKAN ---
     JsonObject device = (*devicesCache)[deviceId];
     // --- PERBAIKAN: Sintaks v7 untuk containsKey/is<T> ---
     if (device["registers"].is<JsonArray>()) {
-      // --- AKHIR PERBAIKAN ---
+    // --- AKHIR PERBAIKAN ---
       JsonArray registers = device["registers"];
       for (JsonVariant reg : registers) {
         // --- PERBAIKAN: Sintaks v7 untuk createNestedObject di Array ---
@@ -474,7 +474,7 @@ bool ConfigManager::updateRegister(const String& deviceId, const String& registe
 
   // --- PERBAIKAN: Sintaks v7 untuk containsKey ---
   if ((*devicesCache)[deviceId].isNull()) {
-    // --- AKHIR PERBAIKAN ---
+  // --- AKHIR PERBAIKAN ---
     Serial.printf("Device %s not found for register update\n", deviceId.c_str());
     return false;
   }
@@ -482,7 +482,7 @@ bool ConfigManager::updateRegister(const String& deviceId, const String& registe
   JsonObject device = (*devicesCache)[deviceId];
   // --- PERBAIKAN: Sintaks v7 untuk containsKey ---
   if (device["registers"].isNull()) {
-    // --- AKHIR PERBAIKAN ---
+  // --- AKHIR PERBAIKAN ---
     Serial.printf("No registers found for device %s\n", deviceId.c_str());
     return false;
   }
@@ -494,7 +494,7 @@ bool ConfigManager::updateRegister(const String& deviceId, const String& registe
       // Check for duplicate address if address is being updated
       // --- PERBAIKAN: Sintaks v7 untuk containsKey ---
       if (!config["address"].isNull()) {
-        // --- AKHIR PERBAIKAN ---
+      // --- AKHIR PERBAIKAN ---
         int newAddress = config["address"].is<String>() ? config["address"].as<String>().toInt() : config["address"].as<int>();
 
         int currentAddress = reg["address"].is<String>() ? reg["address"].as<String>().toInt() : reg["address"].as<int>();
@@ -549,7 +549,7 @@ bool ConfigManager::deleteRegister(const String& deviceId, const String& registe
 
   // --- PERBAIKAN: Sintaks v7 untuk containsKey ---
   if ((*devicesCache)[deviceId].isNull()) {
-    // --- AKHIR PERBAIKAN ---
+  // --- AKHIR PERBAIKAN ---
     Serial.printf("Device %s not found for register deletion\n", deviceId.c_str());
     return false;
   }
@@ -557,7 +557,7 @@ bool ConfigManager::deleteRegister(const String& deviceId, const String& registe
   JsonObject device = (*devicesCache)[deviceId];
   // --- PERBAIKAN: Sintaks v7 untuk containsKey ---
   if (device["registers"].isNull()) {
-    // --- AKHIR PERBAIKAN ---
+  // --- AKHIR PERBAIKAN ---
     Serial.printf("No registers found for device %s\n", deviceId.c_str());
     return false;
   }
@@ -805,7 +805,7 @@ void ConfigManager::removeCorruptKeys() {
 void ConfigManager::clearAllConfigurations() {
   Serial.println("Clearing all device and register configurations...");
   // --- PERBAIKAN: Gunakan StaticJsonDocument untuk alokasi di STACK ---
-  StaticJsonDocument<64> emptyDoc;  // Ganti dari JsonDocument(64)
+  StaticJsonDocument<64> emptyDoc;
   // --- AKHIR PERBAIKAN ---
   emptyDoc.to<JsonObject>();
   saveJson(DEVICES_FILE, emptyDoc);

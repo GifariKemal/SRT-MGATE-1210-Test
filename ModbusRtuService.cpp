@@ -352,7 +352,7 @@ void ModbusRtuService::storeRegisterValue(const String& deviceId, const JsonObje
   dataPoint["device_id"] = deviceId;
   dataPoint["register_id"] = reg["register_id"].as<String>();
 
-  Serial.printf("Data queued: %s\n", dataPoint["name"].as<String>().c_str());
+  // Serial.printf("Data queued: %s\n", dataPoint["name"].as<String>().c_str()); // Dikomentari agar tidak spam log
 
   // Add to message queue
   if (queueMgr) {
@@ -366,21 +366,23 @@ void ModbusRtuService::storeRegisterValue(const String& deviceId, const JsonObje
   if (crudHandler) {
     streamId = crudHandler->getStreamDeviceId(); // Ini harusnya fungsi thread-safe
   }
-
-  Serial.printf("RTU: Device %s, CRUDHandler: %s, StreamID '%s', Match: %s\n",
-                deviceId.c_str(),
-                crudHandlerAvailable ? "OK" : "NULL",
-                streamId.c_str(),
-                (streamId == deviceId) ? "YES" : "NO");
+  
+  // Komentari log spam
+  // Serial.printf("RTU: Device %s, CRUDHandler: %s, StreamID '%s', Match: %s\n",
+  //               deviceId.c_str(),
+  //               crudHandlerAvailable ? "OK" : "NULL",
+  //               streamId.c_str(),
+  //               (streamId == deviceId) ? "YES" : "NO");
 
   if (!streamId.isEmpty() && streamId == deviceId && queueMgr) {
     Serial.printf("[RTU] Streaming data for device %s to BLE\n", deviceId.c_str());
     queueMgr->enqueueStream(dataPoint);
-  } else if (!streamId.isEmpty() && streamId != deviceId) {
-    Serial.printf("[RTU] Device %s not streaming (StreamID: %s)\n", deviceId.c_str(), streamId.c_str());
-  } else if (streamId.isEmpty()) {
-    Serial.printf("[RTU] No streaming active (StreamID empty)\n");
-  }
+  } 
+  // else if (!streamId.isEmpty() && streamId != deviceId) {
+  //   Serial.printf("[RTU] Device %s not streaming (StreamID: %s)\n", deviceId.c_str(), streamId.c_str());
+  // } else if (streamId.isEmpty()) {
+  //   Serial.printf("[RTU] No streaming active (StreamID empty)\n");
+  // }
 }
 
 bool ModbusRtuService::readMultipleRegisters(ModbusMaster* modbus, uint8_t functionCode, uint16_t address, int count, uint16_t* values) {

@@ -601,7 +601,7 @@ void ModbusTcpService::storeRegisterValue(const String& deviceId, const JsonObje
   dataPoint["device_id"] = deviceId;
   dataPoint["register_id"] = reg["register_id"].as<String>();
 
-  Serial.printf("Data queued: %s\n", dataPoint["name"].as<String>().c_str());
+  // Serial.printf("Data queued: %s\n", dataPoint["name"].as<String>().c_str()); // Dikomentari agar tidak spam log
 
   // Add to message queue
   if (queueMgr) {
@@ -616,20 +616,22 @@ void ModbusTcpService::storeRegisterValue(const String& deviceId, const JsonObje
     streamId = crudHandler->getStreamDeviceId(); // Ini harusnya fungsi thread-safe
   }
 
-  Serial.printf("TCP: Device %s, CRUDHandler: %s, StreamID '%s', Match: %s\n",
-                deviceId.c_str(),
-                crudHandlerAvailable ? "OK" : "NULL",
-                streamId.c_str(),
-                (streamId == deviceId) ? "YES" : "NO");
+  // Komentari log spam
+  // Serial.printf("TCP: Device %s, CRUDHandler: %s, StreamID '%s', Match: %s\n",
+  //               deviceId.c_str(),
+  //               crudHandlerAvailable ? "OK" : "NULL",
+  //               streamId.c_str(),
+  //               (streamId == deviceId) ? "YES" : "NO");
 
   if (!streamId.isEmpty() && streamId == deviceId && queueMgr) {
     Serial.printf("[TCP] Streaming data for device %s to BLE\n", deviceId.c_str());
     queueMgr->enqueueStream(dataPoint);
-  } else if (!streamId.isEmpty() && streamId != deviceId) {
-    Serial.printf("[TCP] Device %s not streaming (StreamID: %s)\n", deviceId.c_str(), streamId.c_str());
-  } else if (streamId.isEmpty()) {
-    Serial.printf("[TCP] No streaming active (StreamID empty)\n");
-  }
+  } 
+  // else if (!streamId.isEmpty() && streamId != deviceId) {
+  //   Serial.printf("[TCP] Device %s not streaming (StreamID: %s)\n", deviceId.c_str(), streamId.c_str());
+  // } else if (streamId.isEmpty()) {
+  //   Serial.printf("[TCP] No streaming active (StreamID empty)\n");
+  // }
 }
 
 void ModbusTcpService::getStatus(JsonObject& status) {

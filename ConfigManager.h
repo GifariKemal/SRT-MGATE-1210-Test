@@ -10,9 +10,12 @@ private:
   static const char* DEVICES_FILE;
   static const char* REGISTERS_FILE;
 
-  // Cache for devices and registers
-  JsonDocument* devicesCache;    // <-- PERUBAHAN
-  JsonDocument* registersCache;  // <-- PERUBAHAN
+  // --- PERBAIKAN: Kembalikan ke DynamicJsonDocument ---
+  // Ini diperlukan agar 'new (devicesCache) DynamicJsonDocument(8192)' di .cpp valid
+  DynamicJsonDocument* devicesCache;
+  DynamicJsonDocument* registersCache;
+  // --- AKHIR PERBAIKAN ---
+
   bool devicesCacheValid;
   bool registersCacheValid;
 
